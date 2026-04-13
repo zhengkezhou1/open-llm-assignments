@@ -10,6 +10,7 @@ class GroupRMSNorm(nn.Module):
         applies root-mean-square normalization with \
             learnable scaling transformation on each i-th group individually.
     """
+    weight: torch.nn.Parameter
     
     def __init__(self, 
         hidden_size: int, 
@@ -32,8 +33,15 @@ class GroupRMSNorm(nn.Module):
             device(str, default = "cpu"): parameter device
         """
         super().__init__()
-        raise NotImplementedError("TODO: Assignment1 - Task1")
-        
+        self.hidden_size = hidden_size
+        self.group_size = group_size
+        self.eps = eps
+        self.init_range = init_range
+        self.init_seed = init_seed
+        self.dtype = dtype
+        self.device = device
+        self.reset_parameters()
+            
     def forward(self, input : torch.Tensor) -> torch.Tensor:
         """The forward pass for Group RMS Norm module
 
@@ -43,9 +51,31 @@ class GroupRMSNorm(nn.Module):
         Returns:
             output(torch.Tensor): normalized output tensor, with shape: [batch_size, seq_len, hidden_size]
         """
-        raise NotImplementedError("TODO: Assignment1 - Task1")
+        batch, seq, hidden = input.shape
+        num_groups = hidden // self.group_size
+        
+        x = input.reshape(batch, seq, num_groups ,self.group_size)
+        rms = self.group_rms(batch, seq, num_groups, self.group_size, input.float())
+        x = x / rms
+        w = self.weight.reshape(num_groups, self.group_size)
+        x = x * w
+        output = x.reshape(batch, seq, hidden)
+        return output.to(input.dtype)
+    
+
+    def group_rms(self, batch: int, seq: int, num_groups: int, group_size: int, hidden_status : torch.Tensor) -> torch.Tensor:
+        
+        x = hidden_status.reshape(batch, seq, num_groups, group_size)
+        x = x ** 2
+        x = x.mean(dim=-1, keepdim=True)
+        x = torch.sqrt(x + self.eps)
+        
+        return x
     
     def reset_parameters(self) -> None:
         """Initialize learnable scaling parameters for Group RMS Norm from a uniform distribution"""
-        raise NotImplementedError("TODO: Assignment1 - Task1")
+        g = torch.Generator()
+        g.manual_seed(self.init_seed)
+        self.weight = nn.Parameter(torch.empty(self.hidden_size // self.group_size, self.group_size,  dtype=torch.float32))
+        torch.nn.init.uniform_(self.weight, a=self.init_range[0], b=self.init_range[1], generator=g)
 
